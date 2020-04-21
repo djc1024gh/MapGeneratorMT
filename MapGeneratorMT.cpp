@@ -218,7 +218,7 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	FILE_WRITE_ARGS** fileargs = new FILE_WRITE_ARGS*[giNumThreads];
+	FILE_WRITE_ARGS** fileargs = new FILE_WRITE_ARGS* [giNumThreads];
 	if (!fileargs)
 	{
 		fprintf(stdout, "Can't allocate memory\n");
@@ -275,7 +275,7 @@ int main(int argc, char* argv[])
 			NULL,       // default security attributes
 			0,          // default stack size
 			(LPTHREAD_START_ROUTINE)printMapScaled,
-			fileargs,       // thread function arguments
+			fileargs[i],       // thread function arguments
 			0,          // default creation flags
 			&dwThreadId); // receive thread identifier
 
@@ -293,12 +293,19 @@ int main(int argc, char* argv[])
 	for (int i = 0; i < giNumThreads; i++)
 	{
 		CloseHandle(phThreads[i]);
-		delete fileargs[i];
 	}
-	delete[] fileargs;
+	if (phThreads)
+	{
+		delete[] phThreads;
+	}
 
 	// combine the separate map files into one
 	combineMapFiles(pfOutputFile, iDimension, iScaleFactor);
+
+	if (pfOutputFile != NULL)
+	{
+		fclose(pfOutputFile);
+	}
 
 	// create a bitmap image of the map.  it will be upside down
 	createBitmap(&pcMap, iDimension, iDimension, (char*) "./image.bmp");
@@ -309,18 +316,17 @@ int main(int argc, char* argv[])
 		delete [] pcMap;
 	}
 
-	if (pfOutputFile != NULL)
-	{
-		fclose(pfOutputFile);
-	}
-
 	CloseHandle(ghMapMutex);
 	CloseHandle(ghObstacleMutex);
 
-	if (phThreads)
+	for (int i = 0; i < giNumThreads; i++)
 	{
-		delete[] phThreads;
+		if (fileargs[i])
+		{
+			delete fileargs[i];
+		}
 	}
+	delete[] fileargs;
 
 	tEnd = time(0);
 	int iElapsedSeconds = tEnd - tStart;
@@ -491,8 +497,6 @@ DWORD WINAPI printMapScaled(LPVOID lpParam)
 	fclose(pFile);
 
 	delete[] pszLine;
-
-	delete args;
 
 	return 0;
 }
@@ -712,7 +716,7 @@ void generateBitmapImage(unsigned char *image, int height, int width, char* imag
 	fwrite(infoHeader, 1, infoHeaderSize, imageFile);
 
 	int i;
-	for (i = 0; i < height; i++)
+	for (i = height - 1; i >= 0; i--)
 	{
 		fwrite(image + (i*width*bytesPerPixel), bytesPerPixel, width, imageFile);
 		fwrite(padding, 1, paddingSize, imageFile);
