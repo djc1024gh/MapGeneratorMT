@@ -211,7 +211,26 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	HANDLE* phThreads = (HANDLE*) malloc(sizeof(HANDLE) * giNumThreads);
+	HANDLE* phThreads = new HANDLE [giNumThreads];
+	if (!phThreads)
+	{
+		fprintf(stdout, "Can't allocate memory\n");
+		return 1;
+	}
+
+	FILE_WRITE_ARGS** fileargs = new FILE_WRITE_ARGS*[giNumThreads];
+	if (!fileargs)
+	{
+		fprintf(stdout, "Can't allocate memory\n");
+		return 1;
+	}
+	else
+	{
+		for (int i = 0; i < giNumThreads; i++)
+		{
+			fileargs[i] = new FILE_WRITE_ARGS;
+		}
+	}
 
 	ghMapMutex = CreateMutex(NULL, FALSE, NULL);
 	if (ghMapMutex == NULL)
@@ -226,41 +245,6 @@ int main(int argc, char* argv[])
 		return 1;
 	}
 
-	/*
-	// start threads to add an obstacle
-	DWORD dwThreadId;
-	OBSTACLE_THREAD_ARGS args;
-	args.ppcMap = &pcMap;
-	args.iDimensionCols = iDimension;
-	args.iDimensionRows = iDimension;
-	args.iObstacleMaxSize = iObstacleMaxSize;
-
-	for (int i = 0; i < giNumThreads; i++)
-	{
-		phThreads[i] = CreateThread(
-			NULL,       // default security attributes
-			0,          // default stack size
-			(LPTHREAD_START_ROUTINE) addObstacle,
-			&args,       // thread function arguments
-			0,          // default creation flags
-			&dwThreadId); // receive thread identifier
-
-		if (phThreads[i] == NULL)
-		{
-			printf("CreateThread error: %d\n", GetLastError());
-			return 1;
-		}
-		fprintf(stdout, "Started thread id %d\n", dwThreadId);
-	}
-
-	// wait for all threads to complete
-	WaitForMultipleObjects(giNumThreads, phThreads, TRUE, INFINITE);
-
-	for (int i = 0; i < giNumThreads; i++)
-	{
-		CloseHandle(phThreads[i]);
-	}
-	*/
 	OBSTACLE_THREAD_ARGS args;
 	args.ppcMap = &pcMap;
 	args.iDimensionCols = iDimension;
@@ -274,19 +258,18 @@ int main(int argc, char* argv[])
 	int iRemainingLines = iDimension - (iLinesPerFile * giNumThreads);
 	for (int i = 0; i < giNumThreads; i++)
 	{
-		FILE_WRITE_ARGS* fileargs = (FILE_WRITE_ARGS*) malloc(sizeof(FILE_WRITE_ARGS));
-		fileargs->ppcMap = &pcMap;
-		fileargs->iDimensionCols = iDimension;
-		fileargs->iDimensionRows = iDimension;
-		fileargs->pszFilename = OUTPUT_FILENAME;
-		fileargs->iSuffix = i;
-		fileargs->iStartLine = i * iLinesPerFile;
-		fileargs->iEndLine = fileargs->iStartLine + iLinesPerFile;
+		fileargs[i]->ppcMap = &pcMap;
+		fileargs[i]->iDimensionCols = iDimension;
+		fileargs[i]->iDimensionRows = iDimension;
+		fileargs[i]->pszFilename = OUTPUT_FILENAME;
+		fileargs[i]->iSuffix = i;
+		fileargs[i]->iStartLine = i * iLinesPerFile;
+		fileargs[i]->iEndLine = fileargs[i]->iStartLine + iLinesPerFile;
 		if (i + 1 >= giNumThreads)
 		{
-			fileargs->iEndLine += iRemainingLines;
+			fileargs[i]->iEndLine += iRemainingLines;
 		}
-		fileargs->iScaleFactor = iScaleFactor;
+		fileargs[i]->iScaleFactor = iScaleFactor;
 
 		phThreads[i] = CreateThread(
 			NULL,       // default security attributes
@@ -310,7 +293,9 @@ int main(int argc, char* argv[])
 	for (int i = 0; i < giNumThreads; i++)
 	{
 		CloseHandle(phThreads[i]);
+		delete fileargs[i];
 	}
+	delete[] fileargs;
 
 	// combine the separate map files into one
 	combineMapFiles(pfOutputFile, iDimension, iScaleFactor);
@@ -321,7 +306,7 @@ int main(int argc, char* argv[])
 	// cleanup
 	if (pcMap)
 	{
-		free(pcMap);
+		delete [] pcMap;
 	}
 
 	if (pfOutputFile != NULL)
@@ -331,6 +316,11 @@ int main(int argc, char* argv[])
 
 	CloseHandle(ghMapMutex);
 	CloseHandle(ghObstacleMutex);
+
+	if (phThreads)
+	{
+		delete[] phThreads;
+	}
 
 	tEnd = time(0);
 	int iElapsedSeconds = tEnd - tStart;
@@ -356,7 +346,7 @@ bool initializeMap(char** ppcMap, int iDimensionRows, int iDimensionCols)
 	//fprintf(stdout, "Initializing a map of size %d x %d\n", iDimensionRows, iDimensionCols);
 
 	// initialize the map to all 0s
-	char* pMap = (char*)malloc(iDimensionRows * iDimensionCols * sizeof(char));
+	char* pMap = new char [iDimensionRows * iDimensionCols];
 	if (pMap != NULL)
 	{
 		//memset(piMap, 0, iDimensionRows * iDimensionCols * sizeof(int));
